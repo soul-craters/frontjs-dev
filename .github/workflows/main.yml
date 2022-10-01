@@ -1,0 +1,78 @@
+name: Build and push
+on:
+  push:
+    branches:
+      - main
+      #- 'releases/**'
+
+jobs:
+
+  create_application_cfg_file:
+    needs: [tests_node-version,build_and_push_to_container_repo]
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: stage 1 (run checkout action)
+      uses: actions/checkout@v2
+
+    - name: create cfg file with build_number 
+      env:
+        SOME_VARIABLE_1: value_1
+        SOME_VARIABLE_2: value_4
+        TAG: build_${{github.run_number}}
+      run: |
+        cat argo-template.yml | envsubst > nfx-vuejs.yml
+        cat nfx-vuejs.yml
+    - name: auto-commit and push cfg file
+      uses: dmnemec/copy_file_to_another_repo_action@main
+      env: 
+        API_TOKEN_GITHUB: ${{secrets.API_TOKEN_GITHUB_PUSH}}
+      with:
+        source_file: 'nfx-vuejs.yml'
+        destination_repo: 'twig-trainer/argocd-dev'
+        destination_folder: ''
+        user_email: ${{ secrets.EMAIL_USER }}
+        user_name: 'twig-trainer'
+        commit_message: 'Automated Push cfg file! No changes manually!'
+     
+  tests_node-version:
+    
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [12.x, 14.x]
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v2
+        with:
+          node-version: ${{ matrix.node-version }}
+      - run: npm ci
+      - run: npm run build --if-present
+      - run: npm test
+
+  build_and_push_to_container_repo:
+    needs: tests_node-version
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v2
+    - name: stage 1 (run checkout action)
+      env:
+        DOCKER_USER: ${{secrets.DOCKER_USER}}
+        DOCKER_PASSWORD: ${{secrets.DOCKER_PASSWORD}}
+        TAG: build_${{github.run_number}}
+      run: |
+        docker login -u $DOCKER_USER -p $DOCKER_PASSWORD
+    - name: Set tag value
+      id: set_tag
+      run: |
+        echo "TAG2=$(date +%s)" >> $GITHUB_ENV
+    - name: stage 2 (build the docker image)
+      run: |
+        docker build . --file Dockerfile --tag ${{secrets.DOCKER_USER}}/nflx-dev:build_${{github.run_number}}
+    - name: stage 3 ( push Build to registry:)
+      run: |
+        docker push ${{secrets.DOCKER_USER}}/nflx-dev:build_${{github.run_number}}
