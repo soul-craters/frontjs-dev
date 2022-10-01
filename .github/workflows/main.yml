@@ -75,4 +75,4 @@ jobs:
         docker build . --file Dockerfile --tag ${{secrets.DOCKER_USER}}/nflx-dev:build_${{github.run_number}}
     - name: stage 3 ( push Build to registry:)
       run: |
-        docker push ${{secrets.DOCKER_USER}}/nflx-dev:build_${{github.run_number}}
+        docker push ${{secrets.DOCKER_USER}}/dev:build_${{github.run_number}}
